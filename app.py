@@ -37,20 +37,32 @@ def get_product_data(url, session=None):
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://uq.goodjack.tw/',
             'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-Site': 'same-origin',
             'Sec-Fetch-User': '?1',
             'Cache-Control': 'max-age=0',
         }
 
         http_client = session if session is not None else requests
         logger.info(f'Accessing: {url.strip()}')
-        response = http_client.get(url.strip(), headers=headers, timeout=30)
-        response.raise_for_status()
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = http_client.get(url.strip(), headers=headers, timeout=30)
+                response.raise_for_status()
+                break
+            except requests.exceptions.HTTPError as e:
+                if response.status_code == 403 and attempt < max_retries - 1:
+                    logger.warning(f'Got 403, retrying ({attempt + 1}/{max_retries - 1})...')
+                    time.sleep(2)
+                else:
+                    raise
 
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
