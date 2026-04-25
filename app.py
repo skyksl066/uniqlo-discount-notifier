@@ -55,15 +55,27 @@ def get_product_data(url, session=None):
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 獲取商品名稱 (h1.ts.dividing.big.header 的文字，不含 sub header)
-        h1 = soup.find('h1', class_='ts dividing big header')
-        if not h1:
-            logger.error(f'Could not find product name in URL: {url}')
-            return None
-        sub_header = h1.find('div', class_='sub header')
-        if sub_header:
-            sub_header.decompose()
-        product_name = h1.get_text().strip()
+        # 獲取商品名稱
+        # 支援 TocasUI v4 (ts-header) 與 v3 (ts dividing big header) 兩種結構
+        h1 = (
+            soup.find('h1', class_='ts-header')
+            or soup.find('h1', class_='ts dividing big header')
+        )
+        if h1:
+            # TocasUI v3：sub header 在 h1 內，需移除後再取文字
+            sub_header = h1.find('div', class_='sub header')
+            if sub_header:
+                sub_header.decompose()
+            product_name = h1.get_text().strip()
+        else:
+            # 最終回退：從 <title> 標籤解析商品名稱（格式：「商品名稱 | UQ 搜尋」）
+            title_tag = soup.find('title')
+            if title_tag and '|' in title_tag.get_text():
+                product_name = title_tag.get_text().split('|')[0].strip()
+            else:
+                logger.debug(f'Page snippet: {html[:1000]}')
+                logger.error(f'Could not find product name in URL: {url}')
+                return None
         logger.info(f'Product: {product_name}')
 
         # 獲取價格數據 (從伺服器端渲染的 Chart.js 初始化腳本中提取)
