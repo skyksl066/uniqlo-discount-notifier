@@ -7,26 +7,14 @@ Created on Sat Apr 19 12:17:55 2025
 
 import os
 import sys
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+import re
+import json
+import requests
+from bs4 import BeautifulSoup
 from loguru import logger
 from datetime import datetime
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-
-
-def open_browser():
-    """初始化並返回一個Chrome瀏覽器實例"""
-    options = webdriver.ChromeOptions()
-    if 'SPYDER_ARGS' not in os.environ:
-        options.add_argument('--headless')  # 啟動無頭模式
-    options.add_argument("--log-level=1")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--no-sandbox")
-    return webdriver.Chrome(options=options)
 
 
 def post_message(client, channel, text):
@@ -38,28 +26,59 @@ def post_message(client, channel, text):
         logger.error(f"Error sending message: {e}")
 
 
-def get_product_data(driver, url):
+def get_product_data(url):
     """獲取產品數據"""
     try:
-        driver.get(url.strip())
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        }
+
         logger.info(f'Accessing: {url.strip()}')
+        response = requests.get(url.strip(), headers=headers, timeout=30)
+        response.raise_for_status()
 
-        # 等待頁面加載完成
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'priceChart')))
+        html = response.text
+        soup = BeautifulSoup(html, 'html.parser')
 
-        # 獲取商品名稱
-        product_name = driver.find_element(By.CSS_SELECTOR, 'h1.ts.dividing.big.header').text
+        # 獲取商品名稱 (h1.ts.dividing.big.header 的文字，不含 sub header)
+        h1 = soup.find('h1', class_='ts dividing big header')
+        if not h1:
+            logger.error(f'Could not find product name in URL: {url}')
+            return None
+        sub_header = h1.find('div', class_='sub header')
+        if sub_header:
+            sub_header.decompose()
+        product_name = h1.get_text().strip()
         logger.info(f'Product: {product_name}')
 
-        # 獲取價格數據
-        price_data = driver.execute_script("return priceChart.data.datasets[0].data;")
+        # 獲取價格數據 (從伺服器端渲染的 Chart.js 初始化腳本中提取)
+        script_tag = soup.find('script', string=re.compile(r"label:\s*'價格'"))
+        if not script_tag:
+            logger.error(f'Could not find price chart script in URL: {url}')
+            return None
+
+        price_data_match = re.search(
+            r"label:\s*'價格',\s*data:\s*(\[.*?\]),\s*backgroundColor",
+            script_tag.string, re.DOTALL
+        )
+        if not price_data_match:
+            logger.error(f'Could not find price chart data in URL: {url}')
+            return None
+
+        price_data = json.loads(price_data_match.group(1))
         prices = [float(data['y']) for data in price_data]
+
+        if not prices:
+            logger.error(f'Empty price data for URL: {url}')
+            return None
 
         # 計算價格信息
         max_price = max(prices)
         min_price = min(prices)
         current_price = prices[-1]
-        discount_rate = (max_price - current_price) / max_price
+        discount_rate = (max_price - current_price) / max_price if max_price > 0 else 0
 
         logger.info(f'Price stats - Max: {max_price}, Min: {min_price}, Current: {current_price}, Discount: {discount_rate:.2%}')
 
@@ -96,22 +115,16 @@ def main():
         logger.error("Product list file not found at data/product_list.txt")
         sys.exit(1)
 
-    driver = open_browser()
     qualified_products = []
 
-    try:
-        # 處理每個產品 URL
-        for url in urls:
-            if not url.strip():
-                continue
+    # 處理每個產品 URL
+    for url in urls:
+        if not url.strip():
+            continue
 
-            product_data = get_product_data(driver, url)
-            if product_data:
-                qualified_products.append(product_data)
-    finally:
-        # 確保瀏覽器總是被關閉
-        driver.quit()
-        logger.info('Browser closed')
+        product_data = get_product_data(url)
+        if product_data:
+            qualified_products.append(product_data)
 
     # 每個消息包含的產品數量
     unit_size = 3
