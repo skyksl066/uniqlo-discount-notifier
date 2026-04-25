@@ -398,6 +398,45 @@ class TestGetProductData(unittest.TestCase):
         self.assertNotIn('discount_rate', result, "已售罄商品不應包含 discount_rate")
         logger.success(f"[PASS] test_sold_out_product — {result['name']} 狀態: {result['status']}")
 
+    # ------------------------------------------------------------------ #
+    #  Test 10: TocasUI v4 已售罄商品
+    # ------------------------------------------------------------------ #
+    @patch('cloudscraper.create_scraper')
+    def test_sold_out_product_v4(self, mock_create_scraper):
+        """TocasUI v4 結構的已售罄商品也應正確檢測"""
+        html = """<!DOCTYPE html>
+<html lang="zh-TW">
+<head><title>男 搖粒絨外套 | UQ 搜尋</title></head>
+<body>
+<div class="ts-container">
+  <h1 class="ts-header is-big is-dividing">
+    男 搖粒絨外套
+  </h1>
+</div>
+<div class="sixteen wide column">
+    <div class="ts basic fitted segment">
+        <a class="ts horizontal basic circular label"><span style="color: #5A5A5A;"><i class="archive icon"></i>已售罄</span></a>
+    </div>
+</div>
+<canvas id="priceChart"></canvas>
+</body>
+</html>"""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
+
+        url = "https://uq.goodjack.tw/hmall-products/u0000000052992"
+        result = get_product_data(url)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['status'], 'sold_out')
+        self.assertEqual(result['name'], "男 搖粒絨外套")
+        logger.success(f"[PASS] test_sold_out_product_v4 — {result['name']} v4 結構檢測成功")
+
 
 if __name__ == '__main__':
     logger.info("=" * 60)
