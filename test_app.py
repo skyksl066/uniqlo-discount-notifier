@@ -437,6 +437,70 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['name'], "男 搖粒絨外套")
         logger.success(f"[PASS] test_sold_out_product_v4 — {result['name']} v4 結構檢測成功")
 
+    # ------------------------------------------------------------------ #
+    #  Test 11: 混合商品場景（折扣 + 售罄）
+    # ------------------------------------------------------------------ #
+    @patch('cloudscraper.create_scraper')
+    def test_mixed_products(self, mock_create_scraper):
+        """驗證可以正確區分折扣商品和售罄商品"""
+        # 建立兩個不同的 mock 響應
+        price_rows_discount = [
+            ("2025-01-01", 2990),
+            ("2025-03-01", 1990),
+        ]
+        html_discount = _make_product_html("女", "輕便羽絨外套", "u0000000053269", price_rows_discount)
+
+        html_sold_out = """<!DOCTYPE html>
+<html lang="zh-TW">
+<head><title>男 搖粒絨外套 | UQ 搜尋</title></head>
+<body>
+<h1 class="ts dividing big header">
+    男 搖粒絨外套
+    <div class="sub header">UNIQLO 商品編號 u0000000052992</div>
+</h1>
+<div class="sixteen wide column">
+    <div class="ts basic fitted segment">
+        <a class="ts horizontal basic circular label"><span style="color: #5A5A5A;"><i class="archive icon"></i>已售罄</span></a>
+    </div>
+</div>
+</body>
+</html>"""
+
+        # 設定 side_effect 以返回兩個不同的 session mock
+        mock_session_1 = MagicMock()
+        mock_resp_1 = MagicMock()
+        mock_resp_1.status_code = 200
+        mock_resp_1.text = html_discount
+        mock_resp_1.raise_for_status = MagicMock()
+        mock_session_1.get.return_value = mock_resp_1
+
+        mock_session_2 = MagicMock()
+        mock_resp_2 = MagicMock()
+        mock_resp_2.status_code = 200
+        mock_resp_2.text = html_sold_out
+        mock_resp_2.raise_for_status = MagicMock()
+        mock_session_2.get.return_value = mock_resp_2
+
+        mock_create_scraper.side_effect = [mock_session_1, mock_session_2]
+
+        url_discount = "https://uq.goodjack.tw/hmall-products/u0000000053269"
+        url_sold_out = "https://uq.goodjack.tw/hmall-products/u0000000052992"
+
+        result_discount = get_product_data(url_discount)
+        result_sold_out = get_product_data(url_sold_out)
+
+        # 驗證折扣商品
+        self.assertIsNotNone(result_discount)
+        self.assertEqual(result_discount['status'], 'active')
+        self.assertIn('discount_rate', result_discount)
+
+        # 驗證售罄商品
+        self.assertIsNotNone(result_sold_out)
+        self.assertEqual(result_sold_out['status'], 'sold_out')
+        self.assertNotIn('discount_rate', result_sold_out)
+
+        logger.success("[PASS] test_mixed_products — 折扣和售罄商品分類正確")
+
 
 if __name__ == '__main__':
     logger.info("=" * 60)
