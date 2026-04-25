@@ -44,7 +44,7 @@ def send_sold_out_notification(client, channel, sold_out_products):
     logger.info(f"Sent sold-out notification for {len(sold_out_products)} products")
 
 
-def get_product_data(url, session=None):
+def get_product_data(url, session=None, show_html=False):
     """獲取產品數據或檢測已售罄狀態"""
     try:
         headers = {
@@ -74,6 +74,12 @@ def get_product_data(url, session=None):
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
 
+        # 如果 show_html=True，輸出完整 HTML（用於調試）
+        if show_html:
+            logger.info(f"=== HTML for {url} ===")
+            logger.info(html)
+            logger.info("=== END HTML ===")
+
         # 獲取商品名稱
         # 支援 TocasUI v4 (ts-header) 與 v3 (ts dividing big header) 兩種結構
         h1 = (
@@ -98,7 +104,13 @@ def get_product_data(url, session=None):
         logger.info(f'Product: {product_name}')
 
         # 檢測是否已售罄（新增邏輯）
-        if soup.find('i', class_='archive icon'):
+        archive_icons = soup.find_all('i', class_='archive icon')
+        if archive_icons:
+            if show_html:
+                logger.warning(f"Found {len(archive_icons)} archive icon elements")
+                for idx, icon in enumerate(archive_icons):
+                    # 輸出該 icon 的父元素（上下文）
+                    logger.warning(f"Archive icon #{idx} parent: {icon.parent}")
             logger.warning(f'Product sold out: {product_name}')
             return {
                 'status': 'sold_out',
@@ -151,6 +163,9 @@ def get_product_data(url, session=None):
 
 
 def main():
+    # 檢查是否有 --show-html 參數
+    show_html = '--show-html' in sys.argv
+
     TOKEN = os.environ["SLACK_TOKEN"]
     CHANNEL = os.environ["SLACK_CHANNEL"]
     if not TOKEN or not CHANNEL:
@@ -180,7 +195,7 @@ def main():
         if not url.strip():
             continue
 
-        product_data = get_product_data(url, session=scraper)
+        product_data = get_product_data(url, session=scraper, show_html=show_html)
         if product_data:
             if product_data['status'] == 'sold_out':
                 sold_out_products.append(product_data)
