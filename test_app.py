@@ -19,7 +19,7 @@ from app import get_product_data
 
 
 def _make_product_html(product_sex, product_name, product_code, price_rows):
-    """Build a minimal HTML page that matches the real goodjack.tw structure."""
+    """Build a minimal HTML page that matches the real goodjack.tw structure (TocasUI v3)."""
     price_json = ", ".join(
         f'{{"t":"{row[0]}","y":{row[1]}}}'
         for row in price_rows
@@ -35,6 +35,46 @@ def _make_product_html(product_sex, product_name, product_code, price_rows):
       UNIQLO 商品編號 {product_code}
     </div>
   </h1>
+</div>
+<canvas id="priceChart"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.bundle.min.js"
+    integrity="sha256-xxx" crossorigin="anonymous"></script>
+<script>
+    let ctx = document.getElementById("priceChart");
+    let pointBackgroundColor = [];
+    let pointRadius = [];
+    let priceChart = new Chart(ctx, {{
+        type: 'LineWithLine',
+        data: {{
+            datasets: [{{
+                label: '價格',
+                data: [{price_json}],
+                backgroundColor: 'rgba(255, 255, 255, 0)',
+                borderColor: 'rgba(206, 94, 87, 1.0)',
+                borderWidth: 2,
+            }}]
+        }}
+    }});
+</script>
+</body>
+</html>"""
+
+
+def _make_product_html_v4(product_sex, product_name, product_code, price_rows):
+    """Build a minimal HTML page that matches the goodjack.tw TocasUI v4 structure."""
+    price_json = ", ".join(
+        f'{{"t":"{row[0]}","y":{row[1]}}}'
+        for row in price_rows
+    )
+    return f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head><title>{product_sex} {product_name} | UQ 搜尋</title></head>
+<body>
+<div class="ts-container">
+  <h1 class="ts-header is-big is-dividing">
+    {product_sex} {product_name}
+  </h1>
+  <div class="ts-text is-secondary">UNIQLO 商品編號 {product_code}</div>
 </div>
 <canvas id="priceChart"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.bundle.min.js"
@@ -200,6 +240,72 @@ class TestGetProductData(unittest.TestCase):
 
         self.assertIsNone(result)
         logger.success("[PASS] test_missing_price_chart — 缺少價格資料正確回傳 None")
+
+    # ------------------------------------------------------------------ #
+    #  Test 7: TocasUI v4 HTML 結構（ts-header）
+    # ------------------------------------------------------------------ #
+    @patch('app.requests.get')
+    def test_tocas_v4_html_structure(self, mock_get):
+        """TocasUI v4 的 ts-header 結構應正確解析商品名稱與價格"""
+        price_rows = [
+            ("2025-01-01", 2990),
+            ("2025-03-01", 1990),
+        ]
+        html = _make_product_html_v4("男", "搖粒絨外套", "u0000000052992", price_rows)
+        mock_get.return_value = self._mock_response(html)
+
+        url = "https://uq.goodjack.tw/hmall-products/u0000000052992"
+        result = get_product_data(url)
+
+        self.assertIsNotNone(result, "TocasUI v4 結構應成功解析")
+        self.assertEqual(result['name'], "男 搖粒絨外套")
+        self.assertEqual(result['original_price'], 2990.0)
+        self.assertEqual(result['current_price'], 1990.0)
+        logger.success(f"[PASS] test_tocas_v4_html_structure — {result['name']} 折扣率 {result['discount_rate']:.2%}")
+
+    # ------------------------------------------------------------------ #
+    #  Test 8: 完全無 h1，退回 <title> 標籤解析
+    # ------------------------------------------------------------------ #
+    @patch('app.requests.get')
+    def test_fallback_to_title_tag(self, mock_get):
+        """找不到任何 h1 時，應從 <title> 解析商品名稱"""
+        price_rows = [
+            ("2025-01-01", 2490),
+            ("2025-02-01", 1990),
+        ]
+        price_json = ", ".join(f'{{"t":"{r[0]}","y":{r[1]}}}' for r in price_rows)
+        html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head><title>女 休閒短褲 | UQ 搜尋</title></head>
+<body>
+<canvas id="priceChart"></canvas>
+<script>
+    let ctx = document.getElementById("priceChart");
+    let priceChart = new Chart(ctx, {{
+        type: 'LineWithLine',
+        data: {{
+            datasets: [{{
+                label: '價格',
+                data: [{price_json}],
+                backgroundColor: 'rgba(255, 255, 255, 0)',
+                borderColor: 'rgba(206, 94, 87, 1.0)',
+                borderWidth: 2,
+            }}]
+        }}
+    }});
+</script>
+</body>
+</html>"""
+        mock_get.return_value = self._mock_response(html)
+
+        url = "https://uq.goodjack.tw/hmall-products/u0000000053000"
+        result = get_product_data(url)
+
+        self.assertIsNotNone(result, "title fallback 應成功解析商品名稱")
+        self.assertEqual(result['name'], "女 休閒短褲")
+        self.assertEqual(result['original_price'], 2490.0)
+        self.assertEqual(result['current_price'], 1990.0)
+        logger.success(f"[PASS] test_fallback_to_title_tag — {result['name']} 折扣率 {result['discount_rate']:.2%}")
 
 
 if __name__ == '__main__':
