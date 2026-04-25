@@ -103,10 +103,25 @@ def get_product_data(url, session=None, show_html=False):
                 return None
         logger.info(f'Product: {product_name}')
 
-        # 檢測是否已售罄（新增邏輯）
-        # TODO: archive icon 實際用於「已於日本」，不是「已售罄」
-        # 需要確認真正的已售罄 HTML 結構
-        # 目前暫時禁用此檢測，直到確認正確的標籤
+        # 檢測是否已售罄 — 通過 Schema.org 結構化數據
+        # 尋找 JSON-LD 中的 availability 字段
+        json_ld_script = soup.find('script', {'type': 'application/ld+json'})
+        if json_ld_script:
+            try:
+                import json as json_module
+                json_data = json_module.loads(json_ld_script.string)
+                # 檢查是否有 offers.availability = OutOfStock
+                if 'offers' in json_data and isinstance(json_data['offers'], dict):
+                    availability = json_data['offers'].get('availability', '')
+                    if 'OutOfStock' in availability:
+                        logger.warning(f'Product sold out: {product_name}')
+                        return {
+                            'status': 'sold_out',
+                            'name': product_name,
+                            'url': url.strip()
+                        }
+            except Exception as e:
+                logger.debug(f'Error parsing JSON-LD: {e}')
 
         # 獲取價格數據 (從伺服器端渲染的 Chart.js 初始化腳本中提取)
         script_tag = soup.find('script', string=re.compile(r"label:\s*'價格'"))
