@@ -9,6 +9,7 @@ import os
 import sys
 import re
 import json
+import time
 import requests
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -26,17 +27,29 @@ def post_message(client, channel, text):
         logger.error(f"Error sending message: {e}")
 
 
-def get_product_data(url):
+def get_product_data(url, session=None):
     """獲取產品數據"""
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
         }
 
+        http_client = session if session is not None else requests
         logger.info(f'Accessing: {url.strip()}')
-        response = requests.get(url.strip(), headers=headers, timeout=30)
+        response = http_client.get(url.strip(), headers=headers, timeout=30)
         response.raise_for_status()
 
         html = response.text
@@ -117,14 +130,18 @@ def main():
 
     qualified_products = []
 
+    # 使用 Session 保持 cookie 並讓伺服器識別為合法瀏覽器
+    session = requests.Session()
+
     # 處理每個產品 URL
     for url in urls:
         if not url.strip():
             continue
 
-        product_data = get_product_data(url)
+        product_data = get_product_data(url, session=session)
         if product_data:
             qualified_products.append(product_data)
+        time.sleep(1)
 
     # 每個消息包含的產品數量
     unit_size = 3
