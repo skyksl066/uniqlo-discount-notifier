@@ -10,7 +10,7 @@ import sys
 import re
 import json
 import time
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from loguru import logger
 from datetime import datetime
@@ -48,26 +48,11 @@ def get_product_data(url, session=None):
             'Cache-Control': 'max-age=0',
         }
 
-        http_client = session if session is not None else requests
+        http_client = session if session is not None else cloudscraper.create_scraper()
         logger.info(f'Accessing: {url.strip()}')
 
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = http_client.get(url.strip(), headers=headers, timeout=30)
-                response.raise_for_status()
-                break
-            except requests.exceptions.HTTPError as e:
-                if response.status_code == 403 and attempt < max_retries - 1:
-                    logger.warning(f'Got 403, retrying ({attempt + 1}/{max_retries - 1})...')
-                    logger.debug(f'403 Response Headers: {dict(response.headers)}')
-                    logger.debug(f'403 Response Body (first 500 chars): {response.text[:500]}')
-                    time.sleep(2)
-                else:
-                    if response.status_code == 403:
-                        logger.error(f'Final 403 response. Headers: {dict(response.headers)}')
-                        logger.error(f'403 Body (first 500 chars): {response.text[:500]}')
-                    raise
+        response = http_client.get(url.strip(), headers=headers, timeout=30)
+        response.raise_for_status()
 
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
@@ -159,15 +144,15 @@ def main():
 
     qualified_products = []
 
-    # 使用 Session 保持 cookie 並讓伺服器識別為合法瀏覽器
-    session = requests.Session()
+    # 使用 cloudscraper 繞過 CloudFlare 挑戰
+    scraper = cloudscraper.create_scraper()
 
     # 處理每個產品 URL
     for url in urls:
         if not url.strip():
             continue
 
-        product_data = get_product_data(url, session=session)
+        product_data = get_product_data(url, session=scraper)
         if product_data:
             qualified_products.append(product_data)
         time.sleep(1)
