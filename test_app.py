@@ -307,6 +307,48 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['current_price'], 1990.0)
         logger.success(f"[PASS] test_fallback_to_title_tag — {result['name']} 折扣率 {result['discount_rate']:.2%}")
 
+    # ------------------------------------------------------------------ #
+    #  Test 9: 已售罄商品
+    # ------------------------------------------------------------------ #
+    @patch('cloudscraper.create_scraper')
+    def test_sold_out_product(self, mock_create_scraper):
+        """檢測到已售罄標籤時應返回 status='sold_out'，不解析價格"""
+        html = """<!DOCTYPE html>
+<html lang="zh-TW">
+<head><title>女 輕便羽絨外套 | UQ 搜尋</title></head>
+<body>
+<div class="nine wide large screen column">
+  <h1 class="ts dividing big header">
+    女 輕便羽絨外套
+    <div class="sub header">UNIQLO 商品編號 u0000000053269</div>
+  </h1>
+</div>
+<div class="sixteen wide column">
+    <div class="ts basic fitted segment">
+        <a class="ts horizontal basic circular label"><span style="color: #5A5A5A;"><i class="archive icon"></i>已售罄</span></a>
+    </div>
+</div>
+<canvas id="priceChart"></canvas>
+</body>
+</html>"""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
+
+        url = "https://uq.goodjack.tw/hmall-products/u0000000053269"
+        result = get_product_data(url)
+
+        self.assertIsNotNone(result, "應返回已售罄商品數據")
+        self.assertEqual(result['status'], 'sold_out')
+        self.assertEqual(result['name'], "女 輕便羽絨外套")
+        self.assertEqual(result['url'], url)
+        self.assertNotIn('discount_rate', result, "已售罄商品不應包含 discount_rate")
+        logger.success(f"[PASS] test_sold_out_product — {result['name']} 狀態: {result['status']}")
+
 
 if __name__ == '__main__':
     logger.info("=" * 60)
