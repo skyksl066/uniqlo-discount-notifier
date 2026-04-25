@@ -27,6 +27,23 @@ def post_message(client, channel, text):
         logger.error(f"Error sending message: {e}")
 
 
+def send_sold_out_notification(client, channel, sold_out_products):
+    """發送已售罄商品通知"""
+    if not sold_out_products:
+        return
+
+    items = '\n'.join(
+        f"• {product['name']} — {product['url']}"
+        for product in sold_out_products
+    )
+
+    text = f"""UNIQLO 商品已售罄通知：
+{items}"""
+
+    post_message(client, channel, text)
+    logger.info(f"Sent sold-out notification for {len(sold_out_products)} products")
+
+
 def get_product_data(url, session=None):
     """獲取產品數據或檢測已售罄狀態"""
     try:
@@ -153,6 +170,7 @@ def main():
         sys.exit(1)
 
     qualified_products = []
+    sold_out_products = []
 
     # 使用 cloudscraper 繞過 CloudFlare 挑戰
     scraper = cloudscraper.create_scraper()
@@ -164,8 +182,15 @@ def main():
 
         product_data = get_product_data(url, session=scraper)
         if product_data:
-            qualified_products.append(product_data)
+            if product_data['status'] == 'sold_out':
+                sold_out_products.append(product_data)
+            else:
+                qualified_products.append(product_data)
         time.sleep(1)
+
+    # 發送售罄商品通知
+    if sold_out_products:
+        send_sold_out_notification(client, CHANNEL, sold_out_products)
 
     # 每個消息包含的產品數量
     unit_size = 3
@@ -179,10 +204,7 @@ def main():
 
         message = "UNIQLO 關注商品：\n"
         for product in unit_products:
-            if product['status'] == 'sold_out':
-                message += f"\nItem：{product['name']}\nUrl：{product['url']}\nStatus: SOLD OUT\n"
-            else:
-                message += f"\nItem：{product['name']}\nUrl：{product['url']}\nOriginal Price: {product['original_price']}\nCurrent Price: {product['current_price']}\nLowest Price: {product['min_price']}\nDiscount Rate：{product['discount_rate']:.2%}\n"
+            message += f"\nItem：{product['name']}\nUrl：{product['url']}\nOriginal Price: {product['original_price']}\nCurrent Price: {product['current_price']}\nLowest Price: {product['min_price']}\nDiscount Rate：{product['discount_rate']:.2%}\n"
 
         # 發送通知到 Slack
         logger.info('Sending Slack message')
