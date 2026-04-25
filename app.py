@@ -28,7 +28,7 @@ def post_message(client, channel, text):
 
 
 def get_product_data(url, session=None):
-    """獲取產品數據"""
+    """獲取產品數據或檢測已售罄狀態"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -80,6 +80,15 @@ def get_product_data(url, session=None):
                 return None
         logger.info(f'Product: {product_name}')
 
+        # 檢測是否已售罄（新增邏輯）
+        if soup.find('i', class_='archive icon'):
+            logger.warning(f'Product sold out: {product_name}')
+            return {
+                'status': 'sold_out',
+                'name': product_name,
+                'url': url.strip()
+            }
+
         # 獲取價格數據 (從伺服器端渲染的 Chart.js 初始化腳本中提取)
         script_tag = soup.find('script', string=re.compile(r"label:\s*'價格'"))
         if not script_tag:
@@ -110,6 +119,7 @@ def get_product_data(url, session=None):
         logger.info(f'Price stats - Max: {max_price}, Min: {min_price}, Current: {current_price}, Discount: {discount_rate:.2%}')
 
         return {
+            'status': 'active',
             'name': product_name,
             'url': url.strip(),
             'discount_rate': discount_rate,
@@ -169,7 +179,10 @@ def main():
 
         message = "UNIQLO 關注商品：\n"
         for product in unit_products:
-            message += f"\nItem：{product['name']}\nUrl：{product['url']}\nOriginal Price: {product['original_price']}\nCurrent Price: {product['current_price']}\nLowest Price: {product['min_price']}\nDiscount Rate：{product['discount_rate']:.2%}\n"
+            if product['status'] == 'sold_out':
+                message += f"\nItem：{product['name']}\nUrl：{product['url']}\nStatus: SOLD OUT\n"
+            else:
+                message += f"\nItem：{product['name']}\nUrl：{product['url']}\nOriginal Price: {product['original_price']}\nCurrent Price: {product['current_price']}\nLowest Price: {product['min_price']}\nDiscount Rate：{product['discount_rate']:.2%}\n"
 
         # 發送通知到 Slack
         logger.info('Sending Slack message')

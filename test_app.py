@@ -112,8 +112,8 @@ class TestGetProductData(unittest.TestCase):
     # ------------------------------------------------------------------ #
     #  Test 1: 正常商品（有折扣）
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_discounted_product(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_discounted_product(self, mock_create_scraper):
         """商品目前打折：折扣率應正確計算"""
         price_rows = [
             ("2024-09-01", 2990),
@@ -124,7 +124,13 @@ class TestGetProductData(unittest.TestCase):
             ("2025-04-01", 1490),
         ]
         html = _make_product_html("女", "輕便羽絨外套", "u0000000053269", price_rows)
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000053269"
         result = get_product_data(url)
@@ -137,13 +143,14 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['min_price'], 1490.0)
         expected_discount = (2990 - 1490) / 2990
         self.assertAlmostEqual(result['discount_rate'], expected_discount, places=4)
+        self.assertEqual(result['status'], 'active')
         logger.success(f"[PASS] test_discounted_product — {result['name']} 折扣率 {result['discount_rate']:.2%}")
 
     # ------------------------------------------------------------------ #
     #  Test 2: 商品全價（無折扣）
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_full_price_product(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_full_price_product(self, mock_create_scraper):
         """商品維持原價：折扣率應為 0%"""
         price_rows = [
             ("2025-01-01", 1990),
@@ -151,7 +158,13 @@ class TestGetProductData(unittest.TestCase):
             ("2025-03-01", 1990),
         ]
         html = _make_product_html("男", "圓領T恤", "u0000000051098", price_rows)
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000051098"
         result = get_product_data(url)
@@ -161,13 +174,14 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['original_price'], 1990.0)
         self.assertEqual(result['current_price'], 1990.0)
         self.assertAlmostEqual(result['discount_rate'], 0.0, places=4)
+        self.assertEqual(result['status'], 'active')
         logger.success(f"[PASS] test_full_price_product — {result['name']} 折扣率 {result['discount_rate']:.2%}")
 
     # ------------------------------------------------------------------ #
     #  Test 3: 多次價格變動
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_multiple_price_changes(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_multiple_price_changes(self, mock_create_scraper):
         """多次降價：min_price 應為歷史最低，current_price 為最後一筆"""
         price_rows = [
             ("2024-09-01", 3990),
@@ -177,7 +191,13 @@ class TestGetProductData(unittest.TestCase):
             ("2025-01-01", 1490),
         ]
         html = _make_product_html("男", "羊毛混紡大衣", "u0000000050617", price_rows)
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000050617"
         result = get_product_data(url)
@@ -186,18 +206,21 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['original_price'], 3990.0)
         self.assertEqual(result['min_price'], 1490.0)
         self.assertEqual(result['current_price'], 1490.0)
+        self.assertEqual(result['status'], 'active')
         logger.success(f"[PASS] test_multiple_price_changes — {result['name']} 最高:{result['original_price']} 最低:{result['min_price']} 現在:{result['current_price']}")
 
     # ------------------------------------------------------------------ #
     #  Test 4: HTTP 錯誤（404）
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_http_error(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_http_error(self, mock_create_scraper):
         """HTTP 404 應回傳 None 且不拋出例外"""
         import requests as req
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError("404 Not Found")
-        mock_get.return_value = mock_resp
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000099999"
         result = get_product_data(url)
@@ -208,11 +231,17 @@ class TestGetProductData(unittest.TestCase):
     # ------------------------------------------------------------------ #
     #  Test 5: HTML 結構遺漏商品名稱
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_missing_product_name(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_missing_product_name(self, mock_create_scraper):
         """找不到商品名稱 h1 標籤時應回傳 None"""
         html = "<html><body><p>No product here</p></body></html>"
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000050586"
         result = get_product_data(url)
@@ -223,8 +252,8 @@ class TestGetProductData(unittest.TestCase):
     # ------------------------------------------------------------------ #
     #  Test 6: HTML 結構遺漏價格圖表
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_missing_price_chart(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_missing_price_chart(self, mock_create_scraper):
         """有商品名稱但無價格資料時應回傳 None"""
         html = """<html><body>
         <h1 class="ts dividing big header">
@@ -233,7 +262,13 @@ class TestGetProductData(unittest.TestCase):
         </h1>
         <script>// no price chart here</script>
         </body></html>"""
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000052430"
         result = get_product_data(url)
@@ -244,15 +279,21 @@ class TestGetProductData(unittest.TestCase):
     # ------------------------------------------------------------------ #
     #  Test 7: TocasUI v4 HTML 結構（ts-header）
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_tocas_v4_html_structure(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_tocas_v4_html_structure(self, mock_create_scraper):
         """TocasUI v4 的 ts-header 結構應正確解析商品名稱與價格"""
         price_rows = [
             ("2025-01-01", 2990),
             ("2025-03-01", 1990),
         ]
         html = _make_product_html_v4("男", "搖粒絨外套", "u0000000052992", price_rows)
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000052992"
         result = get_product_data(url)
@@ -261,13 +302,14 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['name'], "男 搖粒絨外套")
         self.assertEqual(result['original_price'], 2990.0)
         self.assertEqual(result['current_price'], 1990.0)
+        self.assertEqual(result['status'], 'active')
         logger.success(f"[PASS] test_tocas_v4_html_structure — {result['name']} 折扣率 {result['discount_rate']:.2%}")
 
     # ------------------------------------------------------------------ #
     #  Test 8: 完全無 h1，退回 <title> 標籤解析
     # ------------------------------------------------------------------ #
-    @patch('app.requests.get')
-    def test_fallback_to_title_tag(self, mock_get):
+    @patch('cloudscraper.create_scraper')
+    def test_fallback_to_title_tag(self, mock_create_scraper):
         """找不到任何 h1 時，應從 <title> 解析商品名稱"""
         price_rows = [
             ("2025-01-01", 2490),
@@ -296,7 +338,13 @@ class TestGetProductData(unittest.TestCase):
 </script>
 </body>
 </html>"""
-        mock_get.return_value = self._mock_response(html)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_resp.raise_for_status = MagicMock()
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_create_scraper.return_value = mock_session
 
         url = "https://uq.goodjack.tw/hmall-products/u0000000053000"
         result = get_product_data(url)
@@ -305,6 +353,7 @@ class TestGetProductData(unittest.TestCase):
         self.assertEqual(result['name'], "女 休閒短褲")
         self.assertEqual(result['original_price'], 2490.0)
         self.assertEqual(result['current_price'], 1990.0)
+        self.assertEqual(result['status'], 'active')
         logger.success(f"[PASS] test_fallback_to_title_tag — {result['name']} 折扣率 {result['discount_rate']:.2%}")
 
     # ------------------------------------------------------------------ #
