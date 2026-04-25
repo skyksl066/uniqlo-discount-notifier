@@ -364,18 +364,27 @@ class TestGetProductData(unittest.TestCase):
         """檢測到已售罄標籤時應返回 status='sold_out'，不解析價格"""
         html = """<!DOCTYPE html>
 <html lang="zh-TW">
-<head><title>女 輕便羽絨外套 | UQ 搜尋</title></head>
+<head>
+<title>女 輕便羽絨外套 | UQ 搜尋</title>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": "女 輕便羽絨外套",
+    "sku": "u0000000053269",
+    "offers": {
+        "@type": "AggregateOffer",
+        "availability": "https://schema.org/OutOfStock"
+    }
+}
+</script>
+</head>
 <body>
 <div class="nine wide large screen column">
   <h1 class="ts dividing big header">
     女 輕便羽絨外套
     <div class="sub header">UNIQLO 商品編號 u0000000053269</div>
   </h1>
-</div>
-<div class="sixteen wide column">
-    <div class="ts basic fitted segment">
-        <a class="ts horizontal basic circular label"><span style="color: #5A5A5A;"><i class="archive icon"></i>已售罄</span></a>
-    </div>
 </div>
 <canvas id="priceChart"></canvas>
 </body>
@@ -406,17 +415,26 @@ class TestGetProductData(unittest.TestCase):
         """TocasUI v4 結構的已售罄商品也應正確檢測"""
         html = """<!DOCTYPE html>
 <html lang="zh-TW">
-<head><title>男 搖粒絨外套 | UQ 搜尋</title></head>
+<head>
+<title>男 搖粒絨外套 | UQ 搜尋</title>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": "男 搖粒絨外套",
+    "sku": "u0000000052992",
+    "offers": {
+        "@type": "AggregateOffer",
+        "availability": "https://schema.org/OutOfStock"
+    }
+}
+</script>
+</head>
 <body>
 <div class="ts-container">
   <h1 class="ts-header is-big is-dividing">
     男 搖粒絨外套
   </h1>
-</div>
-<div class="sixteen wide column">
-    <div class="ts basic fitted segment">
-        <a class="ts horizontal basic circular label"><span style="color: #5A5A5A;"><i class="archive icon"></i>已售罄</span></a>
-    </div>
 </div>
 <canvas id="priceChart"></canvas>
 </body>
@@ -452,17 +470,26 @@ class TestGetProductData(unittest.TestCase):
 
         html_sold_out = """<!DOCTYPE html>
 <html lang="zh-TW">
-<head><title>男 搖粒絨外套 | UQ 搜尋</title></head>
+<head>
+<title>男 搖粒絨外套 | UQ 搜尋</title>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": "男 搖粒絨外套",
+    "sku": "u0000000052992",
+    "offers": {
+        "@type": "AggregateOffer",
+        "availability": "https://schema.org/OutOfStock"
+    }
+}
+</script>
+</head>
 <body>
 <h1 class="ts dividing big header">
     男 搖粒絨外套
     <div class="sub header">UNIQLO 商品編號 u0000000052992</div>
 </h1>
-<div class="sixteen wide column">
-    <div class="ts basic fitted segment">
-        <a class="ts horizontal basic circular label"><span style="color: #5A5A5A;"><i class="archive icon"></i>已售罄</span></a>
-    </div>
-</div>
 </body>
 </html>"""
 
