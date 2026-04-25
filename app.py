@@ -176,7 +176,10 @@ def main():
 
 if __name__ == '__main__':
     # 設置日誌
-    log_path = f'Logs/{datetime.today().strftime("%Y%m%d")}.log'
-    logger.add(log_path, rotation='1 day', level='INFO')
+    import pathlib
+    log_dir = pathlib.Path('Logs')
+    log_dir.mkdir(exist_ok=True)
+    log_path = log_dir / f'{datetime.today().strftime("%Y%m%d")}.log'
+    logger.add(str(log_path), rotation='1 day', level='INFO')
 
     main()
