@@ -60,8 +60,13 @@ def get_product_data(url, session=None):
             except requests.exceptions.HTTPError as e:
                 if response.status_code == 403 and attempt < max_retries - 1:
                     logger.warning(f'Got 403, retrying ({attempt + 1}/{max_retries - 1})...')
+                    logger.debug(f'403 Response Headers: {dict(response.headers)}')
+                    logger.debug(f'403 Response Body (first 500 chars): {response.text[:500]}')
                     time.sleep(2)
                 else:
+                    if response.status_code == 403:
+                        logger.error(f'Final 403 response. Headers: {dict(response.headers)}')
+                        logger.error(f'403 Body (first 500 chars): {response.text[:500]}')
                     raise
 
         html = response.text
