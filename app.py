@@ -104,19 +104,9 @@ def get_product_data(url, session=None, show_html=False):
         logger.info(f'Product: {product_name}')
 
         # 檢測是否已售罄（新增邏輯）
-        archive_icons = soup.find_all('i', class_='archive icon')
-        if archive_icons:
-            if show_html:
-                logger.warning(f"Found {len(archive_icons)} archive icon elements")
-                for idx, icon in enumerate(archive_icons):
-                    # 輸出該 icon 的父元素（上下文）
-                    logger.warning(f"Archive icon #{idx} parent: {icon.parent}")
-            logger.warning(f'Product sold out: {product_name}')
-            return {
-                'status': 'sold_out',
-                'name': product_name,
-                'url': url.strip()
-            }
+        # TODO: archive icon 實際用於「已於日本」，不是「已售罄」
+        # 需要確認真正的已售罄 HTML 結構
+        # 目前暫時禁用此檢測，直到確認正確的標籤
 
         # 獲取價格數據 (從伺服器端渲染的 Chart.js 初始化腳本中提取)
         script_tag = soup.find('script', string=re.compile(r"label:\s*'價格'"))
